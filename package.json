@@ -1,6 +1,6 @@
 {
   "name": "@stoplight/moleculer",
-  "version": "0.14.12",
+  "version": "0.14.12-stoplight.1",
   "description": "Fast & powerful microservices framework for Node.JS",
   "main": "index.js",
   "scripts": {
