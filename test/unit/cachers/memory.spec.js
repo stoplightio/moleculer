@@ -1,7 +1,6 @@
 const ServiceBroker = require("../../../src/service-broker");
 const MemoryCacher = require("../../../src/cachers/memory");
 
-
 describe("Test MemoryCacher constructor", () => {
 	let cacher;
 	afterEach(async () => {
@@ -13,6 +12,7 @@ describe("Test MemoryCacher constructor", () => {
 		expect(cacher).toBeDefined();
 		expect(cacher.opts).toBeDefined();
 		expect(cacher.opts.ttl).toBeNull();
+		expect(cacher.connected).toBe(null);
 	});
 
 	it("should create a timer if set ttl option", () => {
@@ -23,7 +23,6 @@ describe("Test MemoryCacher constructor", () => {
 		expect(cacher.opts.ttl).toBe(500);
 		expect(cacher.timer).toBeDefined();
 	});
-
 });
 
 describe("Test MemoryCacher init", () => {
@@ -40,10 +39,17 @@ describe("Test MemoryCacher init", () => {
 		broker.localBus.on = jest.fn();
 		cacher = new MemoryCacher();
 
+		expect(cacher.connected).toBe(null);
+
 		cacher.init(broker);
 
+		expect(cacher.connected).toBe(true);
+
 		expect(broker.localBus.on).toHaveBeenCalledTimes(1);
-		expect(broker.localBus.on).toHaveBeenCalledWith("$transporter.connected", jasmine.any(Function));
+		expect(broker.localBus.on).toHaveBeenCalledWith(
+			"$transporter.connected",
+			expect.any(Function)
+		);
 	});
 
 	it("should call cache clean after transporter connected", () => {
@@ -60,7 +66,6 @@ describe("Test MemoryCacher init", () => {
 });
 
 describe("Test MemoryCacher set & get", () => {
-
 	let broker = new ServiceBroker({ logger: false });
 	let cacher = new MemoryCacher();
 	cacher.init(broker);
@@ -99,11 +104,9 @@ describe("Test MemoryCacher set & get", () => {
 			expect(obj).toBeNull();
 		});
 	});
-
 });
 
 describe("Test MemoryCacher get() with expire", () => {
-
 	let broker = new ServiceBroker({ logger: false });
 	let cacher = new MemoryCacher();
 	cacher.init(broker);
@@ -115,7 +118,7 @@ describe("Test MemoryCacher get() with expire", () => {
 		c: "Test",
 		d: {
 			e: 55
-		},
+		}
 	};
 
 	const ttlValue = 15;
@@ -166,8 +169,7 @@ describe("Test MemoryCacher get() with expire", () => {
 	});
 });
 
-describe("Test MemoryCacher set & get with default cloning", () => {
-
+describe("Test MemoryCacher set & get with default cloning enabled", () => {
 	let broker = new ServiceBroker({ logger: false });
 	let cacher = new MemoryCacher({ clone: true });
 	cacher.init(broker);
@@ -182,21 +184,76 @@ describe("Test MemoryCacher set & get with default cloning", () => {
 		}
 	};
 
-	cacher.set(key, data1);
+	afterAll(async () => {
+		await cacher.close();
+		await broker.stop();
+	});
+
+	it("should give back the data by key", async () => {
+		let cached_response = await cacher.set(key, data1);
+
+		// Cloned object. References different object
+		expect(cached_response).not.toBe(data1);
+		expect(cached_response).toEqual(data1);
+
+		let obj = await cacher.get(key);
+		expect(obj).toBeDefined();
+		// Cloned object. References different object
+		expect(obj).not.toBe(data1);
+		expect(obj).toEqual(data1);
+
+		let obj2 = await cacher.get(key);
+		expect(obj2).toBeDefined();
+
+		// Cloned object. References different objects
+		expect(obj2).not.toBe(obj);
+		expect(obj).not.toBe(data1);
+
+		expect(obj2).toEqual(data1);
+	});
+});
+
+describe("Test MemoryCacher set & get with default cloning disabled", () => {
+	let broker = new ServiceBroker({ logger: false });
+	let cacher = new MemoryCacher({ clone: false });
+	cacher.init(broker);
+
+	let key = "tst123";
+	let data1 = {
+		a: 1,
+		b: false,
+		c: "Test",
+		d: {
+			e: 55
+		}
+	};
 
 	afterAll(async () => {
 		await cacher.close();
 		await broker.stop();
 	});
 
-	it("should give back the data by key", () => {
-		return cacher.get(key).then(obj => {
-			expect(obj).toBeDefined();
-			expect(obj).not.toBe(data1);
-			expect(obj).toEqual(data1);
-		});
-	});
+	it("should give back the data by key", async () => {
+		let cached_response = await cacher.set(key, data1);
 
+		// Not a clone. References the same entry
+		expect(cached_response).toBe(data1);
+		expect(cached_response).toEqual(data1);
+
+		let obj = await cacher.get(key);
+		expect(obj).toBeDefined();
+		// Not a clone. References the same entry
+		expect(obj).toBe(data1);
+		expect(obj).toEqual(data1);
+
+		let obj2 = await cacher.get(key);
+		expect(obj2).toBeDefined();
+
+		// Not a clone. Reference the same entry
+		expect(obj2).toBe(obj);
+		expect(obj).toBe(data1);
+		expect(obj2).toEqual(data1);
+	});
 });
 
 describe("Test MemoryCacher set & get with custom cloning", () => {
@@ -215,28 +272,26 @@ describe("Test MemoryCacher set & get with custom cloning", () => {
 		}
 	};
 
-	cacher.set(key, data1);
-
 	afterAll(async () => {
 		await cacher.close();
 		await broker.stop();
 	});
 
-	it("should give back the data by key", () => {
-		return cacher.get(key).then(obj => {
-			expect(obj).toBeDefined();
-			expect(obj).not.toBe(data1);
-			expect(obj).toEqual(data1);
+	it("should give back the data by key", async () => {
+		await cacher.set(key, data1);
 
-			expect(clone).toHaveBeenCalledTimes(1);
-			expect(clone).toHaveBeenCalledWith(data1);
-		});
+		let obj = await cacher.get(key);
+		expect(obj).toBeDefined();
+		expect(obj).not.toBe(data1);
+		expect(obj).toEqual(data1);
+
+		// 1 with set + 1 with  get
+		expect(clone).toHaveBeenCalledTimes(2);
+		expect(clone).toHaveBeenCalledWith(data1);
 	});
-
 });
 
 describe("Test MemoryCacher delete", () => {
-
 	let broker = new ServiceBroker({ logger: false });
 	let cacher = new MemoryCacher();
 	cacher.init(broker);
@@ -283,11 +338,9 @@ describe("Test MemoryCacher delete", () => {
 		expect(cacher.cache.get("key2")).toEqual({ data: "value2", expire: null });
 		expect(cacher.cache.get("key3")).toBeUndefined();
 	});
-
 });
 
 describe("Test MemoryCacher clean", () => {
-
 	let broker = new ServiceBroker({ logger: false });
 	let cacher = new MemoryCacher({});
 	cacher.init(broker);
@@ -364,11 +417,9 @@ describe("Test MemoryCacher clean", () => {
 		expect(cacher.cache.get("other.2")).toBeUndefined();
 		expect(cacher.cache.get("other.3")).toBeDefined();
 	});
-
 });
 
 describe("Test MemoryCacher expired method", () => {
-
 	let broker = new ServiceBroker({ logger: false });
 	let cacher = new MemoryCacher({
 		ttl: 60
@@ -416,10 +467,9 @@ describe("Test MemoryCacher expired method", () => {
 			expect(obj).toEqual(data2);
 		});
 	});
-
 });
 
-describe("Test MemoryCacher getWithTTL method", ()=>{
+describe("Test MemoryCacher getWithTTL method", () => {
 	const cacher = new MemoryCacher({
 		ttl: 30,
 		lock: true
@@ -445,5 +495,33 @@ describe("Test MemoryCacher getWithTTL method", ()=>{
 				expect(res.ttl).toBeLessThanOrEqual(30);
 			});
 		});
+	});
+});
+
+describe("Test MemoryCacher getCacheKeys method", () => {
+	const cacher = new MemoryCacher({
+		ttl: 30,
+		lock: true
+	});
+	const broker = new ServiceBroker({
+		logger: false,
+		cacher
+	});
+	it("should return data and ttl", () => {
+		return Promise.all([
+			cacher.set("hello", "test"),
+			cacher.set("hello2", "test"),
+			cacher.set("hello3:test", "test")
+		])
+			.then(() => {
+				return cacher.getCacheKeys();
+			})
+			.then(res => {
+				expect(res).toEqual([
+					{ key: "hello", expiresAt: expect.any(Number) },
+					{ key: "hello2", expiresAt: expect.any(Number) },
+					{ key: "hello3:test", expiresAt: expect.any(Number) }
+				]);
+			});
 	});
 });

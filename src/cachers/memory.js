@@ -6,10 +6,10 @@
 
 "use strict";
 
-const _ 			= require("lodash");
-const utils			= require("../utils");
-const BaseCacher  	= require("./base");
-const { METRIC }	= require("../metrics");
+const _ = require("lodash");
+const utils = require("../utils");
+const BaseCacher = require("./base");
+const { METRIC } = require("../metrics");
 
 const Lock = require("../lock");
 /**
@@ -18,7 +18,6 @@ const Lock = require("../lock");
  * @class MemoryCacher
  */
 class MemoryCacher extends BaseCacher {
-
 	/**
 	 * Creates an instance of MemoryCacher.
 	 *
@@ -53,6 +52,8 @@ class MemoryCacher extends BaseCacher {
 	 */
 	init(broker) {
 		super.init(broker);
+
+		this.connected = true;
 
 		broker.localBus.on("$transporter.connected", () => {
 			// Clear all entries after transporter connected. Maybe we missed some "cache.clear" events.
@@ -119,8 +120,9 @@ class MemoryCacher extends BaseCacher {
 		this.metrics.increment(METRIC.MOLECULER_CACHER_SET_TOTAL);
 		const timeEnd = this.metrics.timer(METRIC.MOLECULER_CACHER_SET_TIME);
 
-		if (ttl == null)
-			ttl = this.opts.ttl;
+		if (ttl == null) ttl = this.opts.ttl;
+
+		data = this.clone ? this.clone(data) : data;
 
 		this.cache.set(key, {
 			data,
@@ -188,7 +190,7 @@ class MemoryCacher extends BaseCacher {
 	 *
 	 * @memberof MemoryCacher
 	 */
-	getWithTTL(key){
+	getWithTTL(key) {
 		this.logger.debug(`GET ${key}`);
 		let data = null;
 		let ttl = null;
@@ -197,7 +199,7 @@ class MemoryCacher extends BaseCacher {
 
 			let item = this.cache.get(key);
 			let now = Date.now();
-			ttl = (item.expire - now)/1000;
+			ttl = (item.expire - now) / 1000;
 			ttl = ttl > 0 ? ttl : null;
 			if (this.opts.ttl) {
 				// Update expire time (hold in the cache if we are using it)
@@ -218,8 +220,8 @@ class MemoryCacher extends BaseCacher {
 	 * @memberof MemoryCacher
 	 */
 	lock(key, ttl) {
-		return this._lock.acquire(key, ttl).then(()=> {
-			return ()=>this._lock.release(key);
+		return this._lock.acquire(key, ttl).then(() => {
+			return () => this._lock.release(key);
 		});
 	}
 
@@ -233,11 +235,11 @@ class MemoryCacher extends BaseCacher {
 	 * @memberof MemoryCacher
 	 */
 	tryLock(key, ttl) {
-		if(this._lock.isLocked(key)){
+		if (this._lock.isLocked(key)) {
 			return this.broker.Promise.reject(new Error("Locked."));
 		}
-		return this._lock.acquire(key, ttl).then(()=> {
-			return ()=>this._lock.release(key);
+		return this._lock.acquire(key, ttl).then(() => {
+			return () => this._lock.release(key);
 		});
 	}
 
@@ -257,6 +259,22 @@ class MemoryCacher extends BaseCacher {
 				this.cache.delete(key);
 			}
 		});
+	}
+
+	/**
+	 * Return all cache keys with available properties (ttl, lastUsed, ...etc).
+	 *
+	 * @returns Promise<Array<Object>>
+	 */
+	getCacheKeys() {
+		return Promise.resolve(
+			Array.from(this.cache.entries()).map(([key, item]) => {
+				return {
+					key,
+					expiresAt: item.expire
+				};
+			})
+		);
 	}
 }
 

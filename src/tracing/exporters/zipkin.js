@@ -1,9 +1,9 @@
 "use strict";
 
-const _ 					= require("lodash");
-const fetch 				= require("node-fetch");
-const BaseTraceExporter 	= require("./base");
-const { isFunction } 		= require("../../utils");
+const _ = require("lodash");
+const fetch = require("node-fetch");
+const BaseTraceExporter = require("./base");
+const { isFunction } = require("../../utils");
 
 /**
  * Trace Exporter for Zipkin.
@@ -18,7 +18,6 @@ const { isFunction } 		= require("../../utils");
  * @class ZipkinTraceExporter
  */
 class ZipkinTraceExporter extends BaseTraceExporter {
-
 	/**
 	 * Creates an instance of ZipkinTraceExporter.
 	 * @param {Object?} opts
@@ -39,7 +38,6 @@ class ZipkinTraceExporter extends BaseTraceExporter {
 
 			/** @type {Object} Additional payload options. */
 			payloadOptions: {
-
 				/** @type {Boolean} Set `debug` property in v2 payload. */
 				debug: false,
 
@@ -48,7 +46,12 @@ class ZipkinTraceExporter extends BaseTraceExporter {
 			},
 
 			/** @type {Object?} Default span tags */
-			defaultTags: null
+			defaultTags: null,
+
+			/** @type {Object} Default headers */
+			headers: {
+				"Content-Type": "application/json"
+			}
 		});
 
 		this.queue = [];
@@ -70,7 +73,9 @@ class ZipkinTraceExporter extends BaseTraceExporter {
 			this.timer.unref();
 		}
 
-		this.defaultTags = isFunction(this.opts.defaultTags) ? this.opts.defaultTags.call(this, tracer) : this.opts.defaultTags;
+		this.defaultTags = isFunction(this.opts.defaultTags)
+			? this.opts.defaultTags.call(this, tracer)
+			: this.opts.defaultTags;
 		if (this.defaultTags) {
 			this.defaultTags = this.flattenTags(this.defaultTags, true);
 		}
@@ -111,18 +116,25 @@ class ZipkinTraceExporter extends BaseTraceExporter {
 		fetch(`${this.opts.baseURL}/api/v2/spans`, {
 			method: "post",
 			body: JSON.stringify(data),
-			headers: {
-				"Content-Type": "application/json",
-			}
-		}).then(res => {
-			if (res.status >= 400) {
-				this.logger.warn(`Unable to upload tracing spans to Zipkin. Status: ${res.status} ${res.statusText}`);
-			} else {
-				this.logger.debug(`Tracing spans (${data.length} spans) are uploaded to Zipkin. Status: ${res.statusText}`);
-			}
-		}).catch(err => {
-			this.logger.warn("Unable to upload tracing spans to Zipkin. Error:" + err.message, err);
-		});
+			headers: this.opts.headers
+		})
+			.then(res => {
+				if (res.status >= 400) {
+					this.logger.warn(
+						`Unable to upload tracing spans to Zipkin. Status: ${res.status} ${res.statusText}`
+					);
+				} else {
+					this.logger.debug(
+						`Tracing spans (${data.length} spans) are uploaded to Zipkin. Status: ${res.statusText}`
+					);
+				}
+			})
+			.catch(err => {
+				this.logger.warn(
+					"Unable to upload tracing spans to Zipkin. Error:" + err.message,
+					err
+				);
+			});
 	}
 
 	/**
@@ -162,7 +174,7 @@ class ZipkinTraceExporter extends BaseTraceExporter {
 
 			tags: {
 				service: serviceName,
-				"span.type": span.type,
+				"span.type": span.type
 			},
 
 			debug: this.opts.payloadOptions.debug,
@@ -208,7 +220,6 @@ class ZipkinTraceExporter extends BaseTraceExporter {
 	convertTime(ts) {
 		return ts != null ? Math.round(ts * 1000) : null;
 	}
-
 }
 
 module.exports = ZipkinTraceExporter;
