@@ -494,7 +494,7 @@ declare namespace Moleculer {
 			| Record<any, any>
 			| null
 			| undefined;
-	}
+	};
 
 	type EventSchema<S = ServiceSettingSchema> = {
 		name?: string;
@@ -675,8 +675,10 @@ declare namespace Moleculer {
 		emit: [EventsMapping] extends [never] ? LegacyEmit : Emit<EventsMapping>;
 		broadcast: [EventsMapping] extends [never] ? LegacyEmit : Emit<EventsMapping>;
 
-		mcall<T>(def: Record<string, MCallDefinition>, opts?: MCallCallingOptions): Promise<Record<string, T>>;
-		mcall<T>(def: Array<MCallDefinition>, opts?: MCallCallingOptions): Promise<Array<T>>;
+		mcall<T>(
+			def: Array<MCallDefinition> | { [name: string]: MCallDefinition },
+			opts?: CallingOptions,
+		): Promise<Array<T> | T>;
 
 		copy(endpoint: Endpoint): this;
 		copy(): this;
@@ -1231,9 +1233,10 @@ declare namespace Moleculer {
 		broadcast: [EventsMapping] extends [never] ? LegacyEmit : Emit<EventsMapping>;
 		broadcastLocal: [EventsMapping] extends [never] ? LegacyEmit : Emit<EventsMapping>;
 
-
-		mcall<T>(def: Record<string, MCallDefinition>, opts?: MCallCallingOptions): Promise<Record<string, T>>;
-		mcall<T>(def: Array<MCallDefinition>, opts?: MCallCallingOptions): Promise<Array<T>>;
+		mcall<T>(
+			def: Array<MCallDefinition> | { [name: string]: MCallDefinition },
+			opts?: CallingOptions,
+		): Promise<Array<T> | T>;
 
 		ping(): Promise<PongResponses>;
 		ping(nodeID: string | Array<string>, timeout?: number): Promise<PongResponse>;
