@@ -71,6 +71,7 @@ declare namespace Moleculer {
 		| "url"
 		| "uuid"
 		| boolean
+		| string
 		| ActionParamSchema;
 	type ActionParams = { [key: string]: ActionParamTypes };
 
@@ -236,7 +237,7 @@ declare namespace Moleculer {
 		defaultQuantiles?: Array<number>;
 		defaultMaxAgeSeconds?: number;
 		defaultAgeBuckets?: number;
-		defaultAggregator?: number;
+		defaultAggregator?: string;
 	}
 
 	type MetricSnapshot = GaugeMetricSnapshot | InfoMetricSnapshot | HistogramMetricSnapshot;
@@ -463,7 +464,7 @@ declare namespace Moleculer {
 		fullPath?: string,
 		basePath?: string,
 	}
-	
+
 	type ActionSchema<
 		F extends ActionsMappingFunction = never,
 		ActionsMapping extends ActionsMappingBase = never,
@@ -494,7 +495,7 @@ declare namespace Moleculer {
 			| undefined;
 	};
 
-	interface EventSchema {
+	type EventSchema<S = ServiceSettingSchema> = {
 		name?: string;
 		group?: string;
 		params?: ActionParams;
@@ -505,7 +506,7 @@ declare namespace Moleculer {
 		context?: boolean;
 
 		[key: string]: any;
-	}
+	} & ThisType<Service<S>>
 
 	// Resolves to the first member of a tuple
 	type First<T extends unknown[]> = T extends [infer U, ...(infer _)] ? U : never;
@@ -757,7 +758,7 @@ declare namespace Moleculer {
 				| ServiceEvent<EventsMapping, P, ActionsMapping>
 		};
 
-	type ServiceMethods = { [key: string]: ((...args: any[]) => any) } & ThisType<Service>;
+	type ServiceMethods = {	[key: string]: (...args: any[]) => any } & ThisType<Service>;
 
 	type CallMiddlewareHandler = (actionName: string, params: any, opts: CallingOptions) => Promise<any>;
 	type Middleware = {
@@ -770,7 +771,7 @@ declare namespace Moleculer {
 			| ((handler: CallMiddlewareHandler) => CallMiddlewareHandler)
 	}
 
-	type MiddlewareInit = (broker: ServiceBroker) => Middleware & ThisType<ServiceBroker>;
+	type MiddlewareInit = (broker: ServiceBroker) => Middleware;
 	interface MiddlewareCallHandlerOptions {
 		reverse?: boolean
 	}
@@ -840,7 +841,7 @@ declare namespace Moleculer {
 		[name: string]: any;
 	}
 
-	type ServiceAction = (<T = Promise<any>, P extends GenericObject = GenericObject>(params?: P, opts?: CallingOptions) => T) & ThisType<Service>;
+	type ServiceAction = <T = Promise<any>,	P extends GenericObject = GenericObject>(params?: P, opts?: CallingOptions) => T;
 
 	interface ServiceActions {
 		[name: string]: ServiceAction;
@@ -881,11 +882,12 @@ declare namespace Moleculer {
 
 		/**
 		 * Wait for the specified services to become available/registered with this broker.
-		 * 
+		 *
 		 * @param serviceNames The service, or services, we are waiting for.
 		 * @param timeout The total time this call may take. If this time has passed and the service(s)
 		 * 						    are not available an error will be thrown. (In milliseconds)
 		 * @param interval The time we will wait before once again checking if the service(s) are available (In milliseconds)
+		 * @param logger the broker logger instance
 		 */
 		waitForServices(serviceNames: string | Array<string> | Array<ServiceDependency>, timeout?: number, interval?: number, logger?: LoggerInstance): Promise<WaitForServicesResult>;
 
@@ -923,7 +925,7 @@ declare namespace Moleculer {
 		delay?: number;
 		maxDelay?: number;
 		factor?: number;
-		check: CheckRetryable;
+		check?: CheckRetryable;
 	}
 
 	interface BrokerRegistryOptions {
@@ -1095,6 +1097,10 @@ declare namespace Moleculer {
 		tracking?: boolean;
 		paramsCloning?: boolean;
 		caller?: string;
+	}
+
+	interface MCallCallingOptions extends CallingOptions{
+		settled?: boolean;
 	}
 
 	interface CallDefinition<P extends GenericObject = GenericObject> {
@@ -1358,6 +1364,7 @@ declare namespace Moleculer {
 		redis?: GenericObject;
 		redlock?: GenericObject;
 		monitor?: boolean;
+		pingInterval?: number;
 	}
 
 	namespace Cachers {
@@ -1398,7 +1405,7 @@ declare namespace Moleculer {
 	type Cacher<T extends Cachers.Base = Cachers.Base> = T;
 
 	class Serializer {
-		constructor();
+		constructor(opts?: any);
 		init(broker: ServiceBroker): void;
 		serialize(obj: GenericObject, type: string): Buffer;
 		deserialize(buf: Buffer, type: string): GenericObject;
@@ -1408,6 +1415,7 @@ declare namespace Moleculer {
 		Base: Serializer,
 		JSON: Serializer,
 		Avro: Serializer,
+		CBOR: Serializer,
 		MsgPack: Serializer,
 		ProtoBuf: Serializer,
 		Thrift: Serializer,
@@ -1735,6 +1743,29 @@ declare namespace Moleculer {
 			prompt(prompt: object | ReadonlyArray<object>): Promise<PromptObject>;
 			delimiter(value: string): void;
 		}
+	}
+
+	namespace Utils {
+		function isFunction(func: unknown): func is Function;
+		function isString(str: unknown): str is string;
+		function isObject(obj: unknown): obj is object;
+		function isPlainObject(obj: unknown): obj is object;
+		function isDate(date: unknown): date is Date;
+		function flatten<T>(arr: readonly T[] | readonly T[][]): T[];
+		function humanize(millis?: number | null): string;
+		function generateToken(): string;
+		function removeFromArray<T>(arr: T[], item: T): T[];
+		function getNodeID(): string;
+		function getIpList(): string[];
+		function isPromise<T>(promise: unknown): promise is Promise<T>;
+		function polyfillPromise(P: typeof Promise): void;
+		function clearRequireCache(filename: string): void;
+		function match(text: string, pattern: string): boolean;
+		function deprecate(prop: unknown, msg?: string): void;
+		function safetyObject(obj: unknown, options?: { maxSafeObjectSize?: number }): any;
+		function dotSet<T extends object>(obj: T, path: string, value: unknown): T;
+		function makeDirs(path: string): void;
+		function parseByteString(value: string): number;
 	}
 }
 

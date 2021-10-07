@@ -24,10 +24,14 @@ async function executeScenarios(broker, waitForServices, waitForNodeIDs) {
 	}
 
 	if (waitForServices) {
-		await broker.waitForServices(waitForServices, 10 * 1000);
+		await broker.waitForServices(waitForServices, 30 * 1000);
 	}
 
-	if (!process.env.TRANSPORTER || process.env.TRANSPORTER == "TCP") {
+	if (
+		!process.env.TRANSPORTER ||
+		process.env.TRANSPORTER == "TCP" ||
+		process.env.DISCOVERER != "Local"
+	) {
 		// Wait for extra time for discovering
 		await broker.Promise.delay(10 * 1000);
 	}
@@ -38,8 +42,7 @@ async function executeScenarios(broker, waitForServices, waitForNodeIDs) {
 		try {
 			await scenario.fn();
 			console.log(kleur.green().bold(`SCENARIO '${scenario.name}': OK`));
-
-		} catch(err) {
+		} catch (err) {
 			failed++;
 			console.error(kleur.red().bold(`SCENARIO '${scenario.name}': ERROR`));
 			if (err.name == "AssertionError") {
@@ -58,12 +61,15 @@ async function executeScenarios(broker, waitForServices, waitForNodeIDs) {
 	return failed == 0;
 }
 
-function waitForNodes(broker, nodes, timeout = 10 * 1000) {
+function waitForNodes(broker, nodes, timeout = 30 * 1000) {
 	const startTime = Date.now();
 	broker.logger.info("Waiting for nodes...", nodes);
 	return new Promise((resolve, reject) => {
 		const check = () => {
-			const available = broker.registry.nodes.list({ onlyAvailable: true }).map(node => node.id);
+			const available = broker.registry.nodes
+				.list({ onlyAvailable: true })
+				.map(node => node.id);
+			broker.logger.info(`Available: '${available.join(", ")}'. Need: ${nodes.join(", ")}`);
 
 			if (nodes.every(nodeID => available.includes(nodeID))) {
 				broker.logger.info(`Nodes '${nodes.join(", ")}' are available.`);
@@ -73,7 +79,7 @@ function waitForNodes(broker, nodes, timeout = 10 * 1000) {
 			if (timeout && Date.now() - startTime > timeout)
 				return reject(new Error("Nodes waiting is timed out."));
 
-			setTimeout(check, 1000);
+			setTimeout(check, 2000);
 		};
 
 		check();
@@ -82,20 +88,25 @@ function waitForNodes(broker, nodes, timeout = 10 * 1000) {
 
 function createNode(nodeID, brokerOpts = {}) {
 	let transporter = process.env.TRANSPORTER || "TCP";
-	if (transporter == "Kafka")
-		transporter = "kafka://localhost:9093";
+	if (transporter == "Kafka") transporter = "kafka://localhost:9093";
 
-	const disableBalancer = process.env.DISABLEBALANCER != null ? process.env.DISABLEBALANCER == "true" : false;
+	const disableBalancer =
+		process.env.DISABLEBALANCER != null ? process.env.DISABLEBALANCER == "true" : false;
+	const discoverer = process.env.DISCOVERER || "Local";
 
-	const broker = new ServiceBroker({
-		namespace: process.env.NAMESPACE,
-		nodeID,
-		logLevel: process.env.LOGLEVEL || "warn",
-		transporter,
-		disableBalancer,
-		serializer: process.env.SERIALIZER || "JSON",
-		...brokerOpts
-	});
+	const broker = new ServiceBroker(
+		_.defaultsDeep(brokerOpts, {
+			namespace: process.env.NAMESPACE,
+			nodeID,
+			logLevel: process.env.LOGLEVEL || "warn",
+			transporter,
+			disableBalancer,
+			serializer: process.env.SERIALIZER || "JSON",
+			registry: {
+				discoverer
+			}
+		})
+	);
 
 	broker.loadService(path.join(__dirname, "./services/helper.service.js"));
 
